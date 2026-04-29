@@ -8,8 +8,10 @@ import (
 	"strconv"
 	"time"
 	"crypto/md5"
-
+	"path/filepath"
+	"database/sql"
 	"golang.org/x/term"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const version string = "1.0.0"
@@ -22,16 +24,79 @@ func main() {
 		return
 	}
 
+	var db *sql.DB
+	var err error
+	db, err = openDB()
+
+	if (err != nil) {
+		log.Fatal(err)
+	}
+
+	defer db.Close()
+
 	switch os.Args[1] {
 	case "help":
 		commandHelp()
 	case "version":
 		commandVersion()
 	case "expense":
-		commandExpense()
+		commandAddRecord(db, "EXPENSE")
+	case "income":
+		commandAddRecord(db, "INCOME")
 	default:
 		fmt.Println("Unknown command: ", os.Args[1])
 	}
+}
+
+func openDB() (*sql.DB, error) {
+	var home string
+	var err error
+	home, err = os.UserHomeDir()
+
+	if (err != nil) {
+		return nil, err
+	}
+
+	var dbPath string = filepath.Join(home, ".local", "share", "kakeibo-cli", "data.db")
+
+	err = os.MkdirAll(filepath.Dir(dbPath), 0755)
+	if (err != nil) {
+		return nil, err
+	}
+
+	var db *sql.DB
+	db, err = sql.Open("sqlite3", dbPath)
+	if (err != nil) {
+		return nil, err
+	}
+
+	var query string = `
+	CREATE TABLE IF NOT EXISTS records (
+		id TEXT PRIMARY KEY,
+		amount INTEGER NOT NULL,
+		date TEXT NOT NULL,
+		memo TEXT,
+		record_type TEXT NOT NULL
+	);
+	`
+	_, err = db.Exec(query)
+
+	if (err != nil) {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func insertRecord(db *sql.DB, r Record) error {
+	var err error
+		_, err = db.Exec(
+		`INSERT INTO records (id, amount, date, memo, record_type)
+		 VALUES (?, ?, ?, ?, ?)`,
+		r.ID, r.Amount, r.Date, r.Memo, r.RecordType,
+	)
+
+	return err
 }
 
 func commandHelp() {
@@ -49,7 +114,7 @@ func commandVersion() {
 	fmt.Println("kakeibo-cli v" + version)
 }
 
-func commandExpense() {
+func commandAddRecord(db *sql.DB, record_type string) {
 	var amount int
 	var date time.Time
 	var memo string
@@ -59,17 +124,17 @@ func commandExpense() {
 	if (args < 3) {
 		fmt.Print("Input Amount: ")
 		sc.Scan()
-		amount = convInt(sc.Text())
+		amount = mustInt(sc.Text())
 	} else {
-		amount = convInt(os.Args[2])
+		amount = mustInt(os.Args[2])
 	}
 
 	if (args < 4) {
 		fmt.Print("Input Date: ")
 		sc.Scan()
-		date = convDate(sc.Text())
+		date = mustDate(sc.Text())
 	} else {
-		date = convDate(os.Args[3])
+		date = mustDate(os.Args[3])
 	}
 
 	if (args < 5) {
@@ -80,28 +145,42 @@ func commandExpense() {
 		memo = os.Args[4]
 	}
 
-	fmt.Println("Amount:", amount, ", Date:", date.Format("2006/01/02"), ", Memo:", memo)
+	fmt.Println("Amount:", amount, ", Date:", date.Format("2006-01-02"), ", Memo:", memo, ", Type:" , record_type)
 	if (checkYes()) {
-		fmt.Println("success: ", generateHash(string(amount) + date.Format("2006/01/02") + memo))
+		var r Record = Record{
+			ID: generateHash(string(amount) + date.Format("2006-01-02") + memo + record_type + string(time.Now().UnixNano())),
+			Amount: amount,
+			Date: date.Format("2006-01-02"),
+			Memo: memo,
+			RecordType: record_type,
+		}
+
+		var err error = insertRecord(db, r)
+
+		if (err != nil) {
+			log.Fatal(err)	
+		}
+
+		fmt.Println("Successfully added record: ", r.ID)
 	} else {
 		return
 	}
 }
 
-func convInt(str string) int {
+func mustInt(str string) int {
 	var n int
 	var err error
 
 	n, err = strconv.Atoi(str)
 
-	if err != nil {
+	if (err != nil) {
 		log.Fatal(err)
 	}
 
 	return n
 }
 
-func convDate(str string) time.Time {
+func mustDate(str string) time.Time {
 	var t time.Time
 	var err error
 
@@ -128,7 +207,7 @@ func convDate(str string) time.Time {
 	
 	t, err = time.ParseInLocation("20060102", full, time.Now().Location())
 
-	if err != nil {
+	if (err != nil) {
 		log.Fatal(err)
 	}
 
@@ -141,7 +220,7 @@ func checkYes() bool {
 
 	oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
 
-	if err != nil {
+	if (err != nil) {
 		log.Fatal(err)
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
@@ -167,4 +246,12 @@ func generateHash(str string) string {
 	var b []byte = []byte(str)
 	var full string = fmt.Sprintf("%x", md5.Sum(b))
 	return full[0:8]
+}
+
+type Record struct {
+	ID     string
+	Amount int
+	Date   string
+	Memo   string
+	RecordType   string
 }
