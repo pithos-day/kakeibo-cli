@@ -15,6 +15,8 @@ import (
 )
 
 const version string = "1.0.0"
+const unit string = "円"
+
 var args int
 
 func main() {
@@ -91,18 +93,54 @@ func openDB() (*sql.DB, error) {
 	return db, nil
 }
 
-func insertRecord(db *sql.DB, r Record) error {
-	var err error
-		_, err = db.Exec(
-		`INSERT INTO records (id, amount, date, memo, record_type, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt,
-	)
-
-	return err
-}
-
 func commandHelp() {
+	
+	if (args > 2) {
+		var input string = os.Args[2]
+		if (input == "show") {
+			fmt.Println(`Usage:
+
+	kakeibo-cli show [filter]
+
+Filter:
+
+	latest   	Latest 10 records
+  	all		All records
+  	YYYYMMDD	Specific date (20010203)
+  	YYYYMM		Specific month (200102)
+  	YYYY		Specific year (2001)
+	MMDD		Day in current year (0203)
+  	MM		Month in current year (02)
+
+Examples:
+
+  kakeibo-cli show latest
+  kakeibo-cli show 200102
+  kakeibo-cli show 02`)
+
+		} else if (input == "expense" || input == "income") {
+				fmt.Println(`Usage:
+
+	kakeibo-cli ` + input + ` [amount] [date] [memo]
+
+Arguments:
+
+	amount    	Expense amount (e.g. 1000)
+  	date    	Date (YYYYMMDD or MMDD)
+  	memo    	Description of the record
+
+Examples:
+`)
+			if (input == "expense") {
+  			fmt.Println("	kakeibo-cli expense 1850 20010203 Lunch")
+			} else {
+				fmt.Println("	kakeibo-cli income 210000 0203 Salary")
+			}
+		} else {
+			fmt.Println("Invalid help topic: " + input)
+		}
+	} else {
+
 	fmt.Println(`Usage:
 
 	kakeibo-cli <command> [arguments]
@@ -110,7 +148,13 @@ func commandHelp() {
 The commands are:
 
 	help		show this message
-	version		show kakeibo-cli version`)
+	version		show kakeibo-cli version
+	show		show records
+	expense		add expense record
+	income		add income record
+
+For details, run: kakeibo-cli help <command>`)
+	}
 }
 
 func commandVersion() {
@@ -129,8 +173,22 @@ func commandShow(db *sql.DB) {
 		input = os.Args[2]
 	}
 
+	var rows *sql.Rows
+	var err error
+
 	if (input == "latest") {
-		//TODO show latest 10 by CreatedAt
+		rows, err = db.Query(`
+		SELECT id, amount, date, memo, record_type
+		FROM records
+		ORDER BY created_at DESC
+		LIMIT 5
+		`)
+	} else if (input == "all") {
+		rows, err = db.Query(`
+		SELECT id, amount, date, memo, record_type
+		FROM records
+		ORDER BY date DESC
+		`)
 	} else {
 		var cond string
 		var args []any
@@ -143,14 +201,31 @@ func commandShow(db *sql.DB) {
 		ORDER BY date DESC
 		`, cond)
 
-		rows, err := db.Query(query, args...)
-		if (err != nil) {
+		rows, err = db.Query(query, args...)
+	}
+
+	if (err != nil) {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	
+
+	printRows(rows)
+}
+
+func printRows(rows *sql.Rows) {
+	for rows.Next() {
+		var r Record
+		err := rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType)
+		if err != nil {
 			log.Fatal(err)
 		}
-		defer rows.Close()
 
-		//print rows
-
+		var t string = "-"
+		if r.RecordType == "INCOME" {
+			t = "+"
+		}
+		fmt.Printf("[%s] %s %s%d%s %s\n", r.ID, r.Date, t, r.Amount, unit, r.Memo)
 	}
 }
 
@@ -176,7 +251,7 @@ func buildDateQuery(input string) (string, []any) {
 		// MM
 		return "REPLACE(date, '-', '') LIKE ?", []any{year + input + "%"}
 	default:
-		return "1=1", nil
+		return "0=1", nil
 	}
 }
 
@@ -193,6 +268,10 @@ func commandAddRecord(db *sql.DB, record_type string) {
 		amount = mustInt(sc.Text())
 	} else {
 		amount = mustInt(os.Args[2])
+	}
+
+	if (amount < 1) {
+		log.Fatal("Invalid amount: ", amount)
 	}
 
 	if (args < 4) {
@@ -232,6 +311,17 @@ func commandAddRecord(db *sql.DB, record_type string) {
 	} else {
 		return
 	}
+}
+
+func insertRecord(db *sql.DB, r Record) error {
+	var err error
+		_, err = db.Exec(
+		`INSERT INTO records (id, amount, date, memo, record_type, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt,
+	)
+
+	return err
 }
 
 func mustInt(str string) int {
