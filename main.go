@@ -49,6 +49,7 @@ func commandVersion() {
 func commandExpense() {
 	var amount int
 	var date time.Time
+	var memo string
 
 	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
 
@@ -68,8 +69,15 @@ func commandExpense() {
 		date = convDate(os.Args[3])
 	}
 
-	fmt.Println("amount: ", amount)
-	fmt.Println("date: ", date)
+	if (args < 5) {
+		fmt.Print("Input Memo: ")
+		sc.Scan()
+		memo = sc.Text()
+	} else {
+		memo = os.Args[4]
+	}
+
+	fmt.Println("Amount: ", amount, ", Date: ", date, ", Memo: ", memo)
 }
 
 func convInt(str string) int {
@@ -98,11 +106,19 @@ func convDate(str string) time.Time {
 		// MMDD
 		var year int = time.Now().Year()
 		full = fmt.Sprintf("%04d%s", year, str)
+	case 1:
+		if (str == "t") {
+			full = time.Now().Format("20060102")
+		} else if (str == "y") {
+			full = time.Now().AddDate(0, 0, -1).Format("20060102")
+		} else {
+			log.Fatal("Inavlid date alias: " + str)
+		}
 	default:
 		log.Fatal("Invalid date format: " + str)
 	}
 	
-	t, err = time.Parse("20060102", full)
+	t, err = time.ParseInLocation("20060102", full, time.Now().Location())
 
 	if err != nil {
 		log.Fatal(err)
