@@ -6,6 +6,7 @@ import (
 	"os"
 	"log"
 	"strconv"
+	"time"
 )
 
 const version string = "1.0.0"
@@ -47,7 +48,7 @@ func commandVersion() {
 
 func commandExpense() {
 	var amount int
-	var date int
+	var date time.Time
 
 	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
 
@@ -62,9 +63,9 @@ func commandExpense() {
 	if (args < 4) {
 		fmt.Print("Input Date: ")
 		sc.Scan()
-		date = convInt(sc.Text())
+		date = convDate(sc.Text())
 	} else {
-		date = convInt(os.Args[3])
+		date = convDate(os.Args[3])
 	}
 
 	fmt.Println("amount: ", amount)
@@ -82,4 +83,30 @@ func convInt(str string) int {
 	}
 
 	return n
+}
+
+func convDate(str string) time.Time {
+	var t time.Time
+	var err error
+
+	var full string
+	switch len(str) {
+	case 8:
+		// YYYYMMDD
+		full = str
+	case 4:
+		// MMDD
+		var year int = time.Now().Year()
+		full = fmt.Sprintf("%04d%s", year, str)
+	default:
+		log.Fatal("Invalid date format: " + str)
+	}
+	
+	t, err = time.Parse("20060102", full)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return t
 }
