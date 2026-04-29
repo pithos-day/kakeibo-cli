@@ -111,12 +111,15 @@ Filter:
   	YYYY		Specific year (2001)
 	MMDD		Day in current year (0203)
   	MM		Month in current year (02)
+		t		Today
+		y		Yesterday
 
 Examples:
 
   kakeibo-cli show latest
   kakeibo-cli show 200102
-  kakeibo-cli show 02`)
+  kakeibo-cli show 02
+	kakeibo-cli show t`)
 
 		} else if (input == "expense" || input == "income") {
 				fmt.Println(`Usage:
@@ -126,7 +129,7 @@ Examples:
 Arguments:
 
 	amount    	Expense amount (e.g. 1000)
-  	date    	Date (YYYYMMDD or MMDD)
+  	date    	Date (YYYYMMDD, MMDD, t=today, y=yesterday)
   	memo    	Description of the record
 
 Examples:
@@ -230,29 +233,42 @@ func printRows(rows *sql.Rows) {
 }
 
 func buildDateQuery(input string) (string, []any) {
-	var year string = time.Now().Format("2006")
+	var today string = time.Now().Format("20060102")
 
 	switch len(input) {
+	case 9:
+		if (input == "yesterday") {
+			return "REPLACE(date, '-', '') = ?", []any{time.Now().AddDate(0, 0, -1).Format("20060102")}
+		}
 	case 8:
 		// YYYYMMDD
 		return "REPLACE(date, '-', '') = ?", []any{input}
 	case 6:
 		// YYYYMM
 		return "REPLACE(date, '-', '') LIKE ?", []any{input + "%"}
+	case 5:
+		if (input == "today") {
+			return "REPLACE(date, '-', '') = ?", []any{today}
+		}
 	case 4:
-		if input[:2] > "12" {
+		if (input[:2] > "12") {
 			// YYYY
 			return "REPLACE(date, '-', '') LIKE ?", []any{input + "%"}
 		} else {
 			// MMDD
-			return "REPLACE(date, '-', '') = ?", []any{year + input}
+			return "REPLACE(date, '-', '') = ?", []any{today[:4] + input}
 		}
 	case 2:
 		// MM
-		return "REPLACE(date, '-', '') LIKE ?", []any{year + input + "%"}
-	default:
-		return "0=1", nil
+		return "REPLACE(date, '-', '') LIKE ?", []any{today[:4] + input + "%"}
+	case 1:
+		if (input == "t") {
+			return "REPLACE(date, '-', '') = ?", []any{today}
+		} else if (input == "y") {
+			return "REPLACE(date, '-', '') = ?", []any{time.Now().AddDate(0, 0, -1).Format("20060102")}
+		}
 	}
+	return "0=1", nil
 }
 
 func commandAddRecord(db *sql.DB, record_type string) {
@@ -293,7 +309,7 @@ func commandAddRecord(db *sql.DB, record_type string) {
 	fmt.Println("Amount:", amount, ", Date:", date.Format("2006-01-02"), ", Memo:", memo, ", Type:" , record_type)
 	if (checkYes()) {
 		var r Record = Record{
-			ID: generateHash(string(amount) + date.Format("2006-01-02") + memo + record_type + string(time.Now().UnixNano())),
+			ID: generateHash(string(amount) + date.Format("2006-01-02") + memo + record_type + fmt.Sprintf("%d", time.Now().UnixNano())),
 			Amount: amount,
 			Date: date.Format("2006-01-02"),
 			Memo: memo,
@@ -351,9 +367,9 @@ func mustDate(str string) time.Time {
 		var year int = time.Now().Year()
 		full = fmt.Sprintf("%04d%s", year, str)
 	case 1:
-		if (str == "t") {
+		if (str == "t" || str == "today") {
 			full = time.Now().Format("20060102")
-		} else if (str == "y") {
+		} else if (str == "y" || str == "yesterday") {
 			full = time.Now().AddDate(0, 0, -1).Format("20060102")
 		} else {
 			log.Fatal("Inavlid date alias: " + str)
