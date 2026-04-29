@@ -7,6 +7,9 @@ import (
 	"log"
 	"strconv"
 	"time"
+	"crypto/md5"
+
+	"golang.org/x/term"
 )
 
 const version string = "1.0.0"
@@ -77,7 +80,12 @@ func commandExpense() {
 		memo = os.Args[4]
 	}
 
-	fmt.Println("Amount: ", amount, ", Date: ", date, ", Memo: ", memo)
+	fmt.Println("Amount:", amount, ", Date:", date.Format("2006/01/02"), ", Memo:", memo)
+	if (checkYes()) {
+		fmt.Println("success: ", generateHash(string(amount) + date.Format("2006/01/02") + memo))
+	} else {
+		return
+	}
 }
 
 func convInt(str string) int {
@@ -125,4 +133,38 @@ func convDate(str string) time.Time {
 	}
 
 	return t
+}
+
+func checkYes() bool {
+	var oldState *term.State
+	var err error
+
+	oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	fmt.Print("Sure? [y/n]: ")
+
+	var b []byte = make([]byte, 1)
+	os.Stdin.Read(b)
+
+	fmt.Print(string(b[0]))
+	term.Restore(int(os.Stdin.Fd()), oldState)
+	fmt.Println()
+
+	switch b[0] {
+	case 'y', 'Y':
+		return true
+	default:
+		return false
+	}
+}
+
+func generateHash(str string) string {
+	var b []byte = []byte(str)
+	var full string = fmt.Sprintf("%x", md5.Sum(b))
+	return full[0:8]
 }
