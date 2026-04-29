@@ -39,6 +39,8 @@ func main() {
 		commandHelp()
 	case "version":
 		commandVersion()
+	case "show":
+		commandShow(db)
 	case "expense":
 		commandAddRecord(db, "EXPENSE")
 	case "income":
@@ -76,7 +78,8 @@ func openDB() (*sql.DB, error) {
 		amount INTEGER NOT NULL,
 		date TEXT NOT NULL,
 		memo TEXT,
-		record_type TEXT NOT NULL
+		record_type TEXT NOT NULL,
+		created_at TEXT
 	);
 	`
 	_, err = db.Exec(query)
@@ -91,9 +94,9 @@ func openDB() (*sql.DB, error) {
 func insertRecord(db *sql.DB, r Record) error {
 	var err error
 		_, err = db.Exec(
-		`INSERT INTO records (id, amount, date, memo, record_type)
-		 VALUES (?, ?, ?, ?, ?)`,
-		r.ID, r.Amount, r.Date, r.Memo, r.RecordType,
+		`INSERT INTO records (id, amount, date, memo, record_type, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt,
 	)
 
 	return err
@@ -112,6 +115,69 @@ The commands are:
 
 func commandVersion() {
 	fmt.Println("kakeibo-cli v" + version)
+}
+
+func commandShow(db *sql.DB) {
+	var input string
+
+	if (args < 3) {
+		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
+		fmt.Print("Input date: ")
+		sc.Scan()
+		input = sc.Text()
+	} else {
+		input = os.Args[2]
+	}
+
+	if (input == "latest") {
+		//TODO show latest 10 by CreatedAt
+	} else {
+		var cond string
+		var args []any
+		cond, args = buildDateQuery(input)
+
+		var query string = fmt.Sprintf(`
+		SELECT id, amount, date, memo, record_type
+		FROM records
+		WHERE %s
+		ORDER BY date DESC
+		`, cond)
+
+		rows, err := db.Query(query, args...)
+		if (err != nil) {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		//print rows
+
+	}
+}
+
+func buildDateQuery(input string) (string, []any) {
+	var year string = time.Now().Format("2006")
+
+	switch len(input) {
+	case 8:
+		// YYYYMMDD
+		return "REPLACE(date, '-', '') = ?", []any{input}
+	case 6:
+		// YYYYMM
+		return "REPLACE(date, '-', '') LIKE ?", []any{input + "%"}
+	case 4:
+		if input[:2] > "12" {
+			// YYYY
+			return "REPLACE(date, '-', '') LIKE ?", []any{input + "%"}
+		} else {
+			// MMDD
+			return "REPLACE(date, '-', '') = ?", []any{year + input}
+		}
+	case 2:
+		// MM
+		return "REPLACE(date, '-', '') LIKE ?", []any{year + input + "%"}
+	default:
+		return "1=1", nil
+	}
 }
 
 func commandAddRecord(db *sql.DB, record_type string) {
@@ -153,6 +219,7 @@ func commandAddRecord(db *sql.DB, record_type string) {
 			Date: date.Format("2006-01-02"),
 			Memo: memo,
 			RecordType: record_type,
+			CreatedAt: fmt.Sprintf("%d", time.Now().Unix()),
 		}
 
 		var err error = insertRecord(db, r)
@@ -249,9 +316,10 @@ func generateHash(str string) string {
 }
 
 type Record struct {
-	ID     string
+	ID string
 	Amount int
-	Date   string
-	Memo   string
-	RecordType   string
+	Date string
+	Memo string
+	RecordType string
+	CreatedAt string
 }
