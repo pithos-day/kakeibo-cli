@@ -43,6 +43,8 @@ func main() {
 		commandVersion()
 	case "show":
 		commandShow(db)
+	case "stats":
+		commandStats(db)
 	case "delete":
 		commandDeleteRecord(db)
 	case "expense":
@@ -215,19 +217,25 @@ func commandShow(db *sql.DB) {
 	defer rows.Close()
 	
 
-	printRows(rows)
+	err = printRows(rows)
+
+	if (err != nil) {
+		log.Fatal(err)
+	}
 }
 
-func printRows(rows *sql.Rows) {
+func printRows(rows *sql.Rows) error {
 	for rows.Next() {
 		var r Record
-		err := rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType)
-		if err != nil {
-			log.Fatal(err)
+		var err error
+		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType)
+		if (err != nil) {
+			return err
 		}
 
 		printRecord(r)
 	}
+	return nil
 }
 
 func printRecord(r Record) {
@@ -275,6 +283,100 @@ func buildDateQuery(input string) (string, []any) {
 		}
 	}
 	return "0=1", nil
+}
+
+func commandStats(db *sql.DB) {
+	var input string
+
+	if (args < 3) {
+		input = "all"
+	} else {
+		input = os.Args[2]
+		if (input != "all" && input != "expense" && input != "income") {
+			log.Fatal("Invalid stats mode: " + input)
+		}
+	}
+
+	var mode int = 0
+	if (input == "expense") {
+		mode = -1
+	} else if (input == "income") {
+		mode = 1
+	}
+
+	var yyyy string = time.Now().Format("2006")
+	var month int = int(time.Now().Month())
+	var rows *sql.Rows
+	var err error
+	var i int = 1
+	for ; i <= month; i++ {
+		var mm string = fmt.Sprintf("%02d", i)
+		var cond string
+		var args []any
+		cond, args = buildDateQuery(mm)
+
+		var query string = fmt.Sprintf(`
+		SELECT id, amount, date, memo, record_type
+		FROM records
+		WHERE %s
+		ORDER BY date DESC
+		`, cond)
+
+		rows, err = db.Query(query, args...)
+
+		if (err != nil) {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		var sum int
+		sum, err = getSumByRows(rows, mode)
+
+		if (err != nil) {
+			log.Fatal(err)
+		}
+
+		var t string = ""
+		if (mode == 0) {
+			switch {
+			case sum == 0:
+    		t = "±"
+			case sum > 0:
+    		t = "+"
+			}
+		} else {
+			sum = getAbs(sum)
+		}
+
+		fmt.Printf("[%s-%s] %s%d\n", yyyy, mm, t, sum)
+	}
+}
+
+func getSumByRows(rows *sql.Rows, mode int) (int, error) {
+	// mode 0 = all, -1 = expense only, 1 = income only
+	var result int = 0
+	for rows.Next() {
+		var r Record
+		var err error
+		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType)
+		if err != nil {
+			return result, err
+		}
+
+		if (mode < 1 && r.RecordType == "EXPENSE") {
+			result -= r.Amount
+		} else if (mode > -1 && r.RecordType == "INCOME") {
+			result += r.Amount
+		}
+	}
+	return result, nil
+}
+
+func getAbs(x int) int {
+	if x >= 0 {
+		return x
+	}
+	return -x
 }
 
 func commandDeleteRecord(db *sql.DB) {
