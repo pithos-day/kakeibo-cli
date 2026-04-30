@@ -43,6 +43,8 @@ func main() {
 		commandVersion()
 	case "show":
 		commandShow(db)
+	case "delete":
+		commandDeleteRecord(db)
 	case "expense":
 		commandAddRecord(db, "EXPENSE")
 	case "income":
@@ -224,12 +226,16 @@ func printRows(rows *sql.Rows) {
 			log.Fatal(err)
 		}
 
-		var t string = "-"
-		if r.RecordType == "INCOME" {
-			t = "+"
-		}
-		fmt.Printf("[%s] %s %s%d%s %s\n", r.ID, r.Date, t, r.Amount, unit, r.Memo)
+		printRecord(r)
 	}
+}
+
+func printRecord(r Record) {
+	var t string = "-"
+	if r.RecordType == "INCOME" {
+		t = "+"
+	}
+	fmt.Printf("[%s] %s %s%d%s %s\n", r.ID, r.Date, t, r.Amount, unit, r.Memo)
 }
 
 func buildDateQuery(input string) (string, []any) {
@@ -269,6 +275,63 @@ func buildDateQuery(input string) (string, []any) {
 		}
 	}
 	return "0=1", nil
+}
+
+func commandDeleteRecord(db *sql.DB) {
+	var input string
+
+	if (args < 3) {
+		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
+		fmt.Print("Input ID: ")
+		sc.Scan()
+		input = sc.Text()
+	} else {
+		input = os.Args[2]
+	}
+
+	var r Record
+	var err error
+
+	r, err = getRecordByID(db, input)
+	if (err != nil) {
+		log.Fatal(err)
+	}
+
+	printRecord(r)
+
+	if (checkYes()) {
+		err = deleteRecord(db, input)
+		if (err != nil) {
+			log.Fatal(err)
+		}
+
+		fmt.Println("Successfully removed record: ", input)
+	}
+}
+
+func getRecordByID(db *sql.DB, id string) (Record, error) {
+	var r Record
+	var err error
+
+	err = db.QueryRow(`
+		SELECT id, amount, date, memo, record_type
+		FROM records
+		WHERE id = ?
+	`, id).Scan(
+		&r.ID,
+		&r.Amount,
+		&r.Date,
+		&r.Memo,
+		&r.RecordType,
+	)
+
+	return r, err
+}
+
+func deleteRecord(db *sql.DB, id string) error {
+	var err error
+	_, err = db.Exec("DELETE FROM records WHERE id = ?", id)
+	return err
 }
 
 func commandAddRecord(db *sql.DB, record_type string) {
