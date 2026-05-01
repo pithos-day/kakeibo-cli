@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"os"
 	"log"
+	"strings"
 	"strconv"
 	"time"
 	"crypto/md5"
@@ -308,6 +309,9 @@ func commandStats(db *sql.DB) {
 	var month int = int(time.Now().Month())
 	var rows *sql.Rows
 	var err error
+	var msgs []string = []string{}
+	var gsums []int = []int{}
+	var gsum_total int = 0
 	var i int = 1
 	for ; i <= month; i++ {
 		var mm string = fmt.Sprintf("%02d", i)
@@ -336,19 +340,32 @@ func commandStats(db *sql.DB) {
 			log.Fatal(err)
 		}
 
+		var gsum int = sum
 		var t string = ""
 		if (mode == 0) {
+			gsum = getMin(gsum, 0)
 			switch {
 			case sum == 0:
-    		t = "±"
+    		t = "\u00B1"
 			case sum > 0:
     		t = "+"
 			}
 		} else {
 			sum = getAbs(sum)
 		}
+		gsum = getAbs(gsum)
+		gsum_total += gsum
+		gsums = append(gsums, gsum)
 
-		fmt.Printf("[%s-%s] %s%d\n", yyyy, mm, t, sum)
+		msgs = append(msgs, fmt.Sprintf("[%s-%s] %s%d", yyyy, mm, t, sum))
+	}
+
+	i = 0
+
+	for ; i < month; i++ {
+		fmt.Println(msgs[i])
+		var ratio int = (gsums[i]*20+gsum_total-1)/gsum_total
+		fmt.Println(strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 20-ratio))
 	}
 }
 
@@ -373,10 +390,17 @@ func getSumByRows(rows *sql.Rows, mode int) (int, error) {
 }
 
 func getAbs(x int) int {
-	if x >= 0 {
+	if (x >= 0) {
 		return x
 	}
 	return -x
+}
+
+func getMin(x int,m int) int {
+	if (x < m) {
+		return x
+	}
+	return m
 }
 
 func commandDeleteRecord(db *sql.DB) {
