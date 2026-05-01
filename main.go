@@ -129,13 +129,17 @@ Examples:
 		} else if (input == "stats") {
 	fmt.Println(`Usage:
 
-  kakeibo-cli stats [mode]
+  kakeibo-cli stats [mode] [year]
 
 Mode:
 
   all        Net balance (income - expense) by month
   expense    Expenses by month
   income     Income by month
+
+Arguments:
+
+  year       YYYY (e.g. 2026, default: current year)
 
 Examples:
 
@@ -317,6 +321,8 @@ func buildDateQuery(input string) (string, []any) {
 
 func commandStats(db *sql.DB) {
 	var input string
+	var yyyy string
+	var month int
 
 	if (args < 3) {
 		input = "all"
@@ -334,8 +340,18 @@ func commandStats(db *sql.DB) {
 		mode = 1
 	}
 
-	var yyyy string = time.Now().Format("2006")
-	var month int = int(time.Now().Month())
+	if (args > 3) {
+		var year string = os.Args[3]
+		if (len(year) == 4) {
+			yyyy = year
+			month = 12
+		} else {
+			log.Fatal("Invalid year: " + year)
+		}
+	} else {
+		yyyy = time.Now().Format("2006")
+		month = int(time.Now().Month())
+	}
 	var rows *sql.Rows
 	var err error
 	var msgs []string = []string{}
@@ -346,7 +362,7 @@ func commandStats(db *sql.DB) {
 		var mm string = fmt.Sprintf("%02d", i)
 		var cond string
 		var args []any
-		cond, args = buildDateQuery(mm)
+		cond, args = buildDateQuery(yyyy + mm)
 
 		var query string = fmt.Sprintf(`
 		SELECT id, amount, date, memo, record_type
@@ -393,7 +409,12 @@ func commandStats(db *sql.DB) {
 
 	for ; i < month; i++ {
 		fmt.Println(msgs[i])
-		var ratio int = (gsums[i]*20+gsum_total-1)/gsum_total
+		var ratio int
+		if (gsum_total == 0) {
+			ratio = 1
+		} else {
+			ratio = (gsums[i]*20+gsum_total-1)/gsum_total
+		}
 		fmt.Println(strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 20-ratio))
 	}
 }
