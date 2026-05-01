@@ -126,6 +126,21 @@ Examples:
   kakeibo-cli show 02
 	kakeibo-cli show t`)
 
+		} else if (input == "stats") {
+	fmt.Println(`Usage:
+
+  kakeibo-cli stats [mode]
+
+Mode:
+
+  all        Net balance (income - expense) by month
+  expense    Expenses by month
+  income     Income by month
+
+Examples:
+
+  kakeibo-cli stats
+  kakeibo-cli stats expense`)
 		} else if (input == "expense" || input == "income") {
 				fmt.Println(`Usage:
 
@@ -144,6 +159,18 @@ Examples:
 			} else {
 				fmt.Println("	kakeibo-cli income 210000 0203 Salary")
 			}
+		} else if (input == "delete") {
+				fmt.Println(`Usage:
+
+	kakeibo-cli delete [id]
+
+Arguments:
+
+	id    	Hash id for record
+
+Examples:
+
+	kakeibo-cli delete 1cb193f6`)
 		} else {
 			fmt.Println("Invalid help topic: " + input)
 		}
@@ -158,8 +185,10 @@ The commands are:
 	help		show this message
 	version		show kakeibo-cli version
 	show		show records
+	stats		show monthly statistics
 	expense		add expense record
 	income		add income record
+	delete		delete record
 
 For details, run: kakeibo-cli help <command>`)
 	}
