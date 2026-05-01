@@ -277,7 +277,7 @@ func printRecord(r Record) {
 	if r.RecordType == "INCOME" {
 		t = "+"
 	}
-	fmt.Printf("[%s] %s %s%d%s %s\n", r.ID, r.Date, t, r.Amount, unit, r.Memo)
+	fmt.Printf("[%s] %s%d%s %s (%s)\n", r.Date, t, r.Amount, unit, r.Memo, r.ID)
 }
 
 func buildDateQuery(input string) (string, []any) {
@@ -341,12 +341,11 @@ func commandStats(db *sql.DB) {
 	}
 
 	if (args > 3) {
-		var year string = os.Args[3]
-		if (len(year) == 4) {
-			yyyy = year
+		if (len(os.Args[3]) == 4) {
+			yyyy = os.Args[3]
 			month = 12
 		} else {
-			log.Fatal("Invalid year: " + year)
+			log.Fatal("Invalid year: " + os.Args[3])
 		}
 	} else {
 		yyyy = time.Now().Format("2006")
@@ -357,6 +356,7 @@ func commandStats(db *sql.DB) {
 	var msgs []string = []string{}
 	var gsums []int = []int{}
 	var gsum_total int = 0
+	var sum_total int = 0
 	var i int = 1
 	for ; i <= month; i++ {
 		var mm string = fmt.Sprintf("%02d", i)
@@ -385,6 +385,8 @@ func commandStats(db *sql.DB) {
 			log.Fatal(err)
 		}
 
+		sum_total += sum
+
 		var gsum int = sum
 		var t string = ""
 		if (mode == 0) {
@@ -405,17 +407,41 @@ func commandStats(db *sql.DB) {
 		msgs = append(msgs, fmt.Sprintf("[%s-%s] %s%d", yyyy, mm, t, sum))
 	}
 
+	var t1 string = ""
+	switch {
+	case sum_total == 0:
+  	t1 = "\u00B1"
+	case sum_total > 0:
+    t1 = "+"
+	}
+
+	var average int = sum_total/month
+
+	var t2 string = ""
+	switch {
+	case average == 0:
+  	t2 = "\u00B1"
+	case average > 0:
+    t2 = "+"
+	}
+
+	// TODO: add function to add sign on number
+
+	fmt.Printf("[%s-01 ~ %s-%s] Total: %s%d, Average: %s%d\n\n", yyyy, yyyy, fmt.Sprintf("%02d", month), t1, sum_total, t2, average)
+
 	i = 0
 
 	for ; i < month; i++ {
-		fmt.Println(msgs[i])
+		var bar string
 		var ratio int
 		if (gsum_total == 0) {
 			ratio = 1
 		} else {
-			ratio = (gsums[i]*20+gsum_total-1)/gsum_total
+			ratio = getMax((gsums[i]*40+gsum_total-1)/gsum_total,1)
 		}
-		fmt.Println(strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 20-ratio))
+		bar = strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 40-ratio)
+		fmt.Println(msgs[i])
+		fmt.Println(bar)
 	}
 }
 
@@ -444,6 +470,13 @@ func getAbs(x int) int {
 		return x
 	}
 	return -x
+}
+
+func getMax(x int,m int) int {
+	if (x > m) {
+		return x
+	}
+	return m
 }
 
 func getMin(x int,m int) int {
