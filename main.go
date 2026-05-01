@@ -355,7 +355,7 @@ func commandStats(db *sql.DB) {
 	var err error
 	var msgs []string = []string{}
 	var gsums []int = []int{}
-	var gsum_total int = 0
+	var gsum_max int = 0
 	var sum_total int = 0
 	var i int = 1
 	for ; i <= month; i++ {
@@ -391,58 +391,46 @@ func commandStats(db *sql.DB) {
 		var t string = ""
 		if (mode == 0) {
 			gsum = getMin(gsum, 0)
-			switch {
-			case sum == 0:
-    		t = "\u00B1"
-			case sum > 0:
-    		t = "+"
-			}
+			t = addSign(sum)
 		} else {
-			sum = getAbs(sum)
+			t = strconv.Itoa(getAbs(sum))
 		}
 		gsum = getAbs(gsum)
-		gsum_total += gsum
+		gsum_max = getMax(gsum_max, gsum)
 		gsums = append(gsums, gsum)
 
-		msgs = append(msgs, fmt.Sprintf("[%s-%s] %s%d", yyyy, mm, t, sum))
-	}
-
-	var t1 string = ""
-	switch {
-	case sum_total == 0:
-  	t1 = "\u00B1"
-	case sum_total > 0:
-    t1 = "+"
+		msgs = append(msgs, fmt.Sprintf("[%s-%s] %s", yyyy, mm, t))
 	}
 
 	var average int = sum_total/month
 
-	var t2 string = ""
-	switch {
-	case average == 0:
-  	t2 = "\u00B1"
-	case average > 0:
-    t2 = "+"
-	}
-
-	// TODO: add function to add sign on number
-
-	fmt.Printf("[%s-01 ~ %s-%s] Total: %s%d, Average: %s%d\n\n", yyyy, yyyy, fmt.Sprintf("%02d", month), t1, sum_total, t2, average)
+	fmt.Printf("[%s-01 ~ %s-%s] Total: %s, Average: %s\n\n", yyyy, yyyy, fmt.Sprintf("%02d", month), addSign(sum_total), addSign(average))
 
 	i = 0
 
 	for ; i < month; i++ {
 		var bar string
 		var ratio int
-		if (gsum_total == 0) {
+		if (gsum_max == 0) {
 			ratio = 1
 		} else {
-			ratio = getMax((gsums[i]*40+gsum_total-1)/gsum_total,1)
+			ratio = getMax((gsums[i]*40+gsum_max-1)/gsum_max,1)
 		}
 		bar = strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 40-ratio)
 		fmt.Println(msgs[i])
 		fmt.Println(bar)
 	}
+}
+
+func addSign(n int) string {
+	var t string = ""
+	switch {
+	case n == 0:
+    	t = "\u00B1"
+	case n > 0:
+    	t = "+"
+	}
+	return t + strconv.Itoa(n)
 }
 
 func getSumByRows(rows *sql.Rows, mode int) (int, error) {
