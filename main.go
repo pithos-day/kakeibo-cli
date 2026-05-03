@@ -79,7 +79,8 @@ func openDB() (*sql.DB, error) {
 		date TEXT NOT NULL,
 		memo TEXT,
 		record_type TEXT NOT NULL,
-		created_at TEXT
+		created_at TEXT NOT NULL,
+		category TEXT NOT NULL
 	);
 	`
 	_, err = db.Exec(query)
@@ -292,14 +293,14 @@ func commandShow(db *sql.DB) error {
 
 	if (input == "latest") {
 		rows, err = db.Query(`
-		SELECT id, amount, date, memo, record_type
+		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		ORDER BY created_at DESC
 		LIMIT 5
 		`)
 	} else if (input == "all") {
 		rows, err = db.Query(`
-		SELECT id, amount, date, memo, record_type
+		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		ORDER BY date DESC
 		`)
@@ -309,7 +310,7 @@ func commandShow(db *sql.DB) error {
 		cond, args1 = buildDateQuery(input)
 
 		var query string = fmt.Sprintf(`
-		SELECT id, amount, date, memo, record_type
+		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		WHERE %s
 		ORDER BY date DESC
@@ -336,7 +337,7 @@ func printRows(rows *sql.Rows) error {
 	for rows.Next() {
 		var r Record
 		var err error
-		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType)
+		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType, &r.Category)
 		if (err != nil) {
 			return err
 		}
@@ -351,7 +352,7 @@ func printRecord(r Record) {
 	if r.RecordType == "INCOME" {
 		t = "+"
 	}
-	fmt.Printf("[%s] %s%d%s %s (%s)\n", r.Date, t, r.Amount, unit, r.Memo, r.ID)
+	fmt.Printf("[%s] %s%d%s %s (%s) : %s\n", r.Date, t, r.Amount, unit, r.Memo, r.ID, r.Category)
 }
 
 func buildDateQuery(input string) (string, []any) {
@@ -439,7 +440,7 @@ func commandStats(db *sql.DB) error {
 		cond, args1 = buildDateQuery(yyyy + mm)
 
 		var query string = fmt.Sprintf(`
-		SELECT id, amount, date, memo, record_type
+		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		WHERE %s
 		ORDER BY date DESC
@@ -568,7 +569,7 @@ func commandDeleteRecord(db *sql.DB) error {
 			return err
 		}
 
-		fmt.Println("Successfully removed record: ", input)
+		fmt.Println("Successfully deleted record: ", input)
 	}
 	return nil
 }
@@ -578,7 +579,7 @@ func getRecordByID(db *sql.DB, id string) (Record, error) {
 	var err error
 
 	err = db.QueryRow(`
-		SELECT id, amount, date, memo, record_type
+		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		WHERE id = ?
 	`, id).Scan(
@@ -587,6 +588,7 @@ func getRecordByID(db *sql.DB, id string) (Record, error) {
 		&r.Date,
 		&r.Memo,
 		&r.RecordType,
+		&r.Category,
 	)
 
 	return r, err
@@ -603,6 +605,7 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 	var amount int
 	var date time.Time
 	var memo string
+	var category string
 	var err error
 
 	if (len(args) < 3) {
@@ -642,15 +645,28 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 	}
 
 	if (len(args) < 5) {
+		category, err = line.Prompt("Input Category (Empty to Misc): ")
+		if (err != nil) {
+			return err
+		}
+	} else {
+		category = args[4]
+	}
+
+	if (category == "") {
+		category = "Misc"
+	}
+
+	if (len(args) < 6) {
 		memo, err = line.Prompt("Input Memo: ")
 		if (err != nil) {
 			return err
 		}
 	} else {
-		memo = args[4]
+		memo = args[5]
 	}
 
-	fmt.Println("Amount:", amount, ", Date:", date.Format("2006-01-02"), ", Memo:", memo, ", Type:" , record_type)
+	fmt.Printf("Amount: %d, Date: %s, Memo: %s, Type: %s, Category: %s\n", amount, date.Format("2006-01-02"), memo, record_type, category)
 	if (checkYes()) {
 		var r Record = Record{
 			ID: generateHash(string(amount) + date.Format("2006-01-02") + memo + record_type + fmt.Sprintf("%d", time.Now().UnixNano())),
@@ -659,6 +675,7 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 			Memo: memo,
 			RecordType: record_type,
 			CreatedAt: fmt.Sprintf("%d", time.Now().Unix()),
+			Category: category,
 		}
 
 		err = insertRecord(db, r)
@@ -677,9 +694,9 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 func insertRecord(db *sql.DB, r Record) error {
 	var err error
 		_, err = db.Exec(
-		`INSERT INTO records (id, amount, date, memo, record_type, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt,
+		`INSERT INTO records (id, amount, date, memo, record_type, created_at, category)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt, r.Category,
 	)
 
 	return err
@@ -748,4 +765,5 @@ type Record struct {
 	Memo string
 	RecordType string
 	CreatedAt string
+	Category string
 }
