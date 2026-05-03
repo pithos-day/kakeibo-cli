@@ -3,14 +3,13 @@ package main
 import (
   "fmt"
 	"os"
-	"log"
+	"errors"
 	"strings"
 	"strconv"
 	"time"
 	"crypto/md5"
 	"path/filepath"
 	"database/sql"
-	"golang.org/x/term"
 	"github.com/peterh/liner"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -33,7 +32,8 @@ func main() {
 	db, err = openDB()
 
 	if (err != nil) {
-		log.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	defer db.Close()
@@ -42,7 +42,12 @@ func main() {
 	line.SetCtrlCAborts(true)
 	defer line.Close()
 	
-	executeCommand(db)
+	err = executeCommand(db)
+
+	if (err != nil) {
+		fmt.Println(err)
+		return
+	}
 }
 
 func openDB() (*sql.DB, error) {
@@ -86,30 +91,34 @@ func openDB() (*sql.DB, error) {
 	return db, nil
 }
 
-func executeCommand(db *sql.DB) {
+func executeCommand(db *sql.DB) error {
 	switch args[1] {
 	case "help":
 		commandHelp()
+		return nil
 	case "version":
 		commandVersion()
+		return nil
 	case "repl":
 		if (args[0] != "repl") {
 			commandRepl(db)
 		} else {
 			fmt.Println("Can't execute repl in repl")
 		}
+		return nil
 	case "show":
-		commandShow(db)
+		return commandShow(db)
 	case "stats":
-		commandStats(db)
+		return commandStats(db)
 	case "delete":
-		commandDeleteRecord(db)
+		return commandDeleteRecord(db)
 	case "expense":
-		commandAddRecord(db, "EXPENSE")
+		return commandAddRecord(db, "EXPENSE")
 	case "income":
-		commandAddRecord(db, "INCOME")
+		return commandAddRecord(db, "INCOME")
 	default:
 		fmt.Println("Unknown command: ", args[1])
+		return nil
 	}
 }
 
@@ -254,7 +263,10 @@ func commandRepl(db *sql.DB) {
 
 		if (1 < len(args)) {
 			line.SetCompleter(nil)
-			executeCommand(db)
+			err = executeCommand(db)
+			if (err != nil) {
+				fmt.Println(err)
+			}
 			line.AppendHistory(input)
 			line.SetCompleter(replCompleter)
 		}
@@ -262,7 +274,7 @@ func commandRepl(db *sql.DB) {
 
 }
 
-func commandShow(db *sql.DB) {
+func commandShow(db *sql.DB) error {
 	var input string
 	var err error
 
@@ -270,7 +282,7 @@ func commandShow(db *sql.DB) {
 		input, err = line.Prompt("Input date: ")
 
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 	} else {
 		input = args[2]
@@ -307,7 +319,7 @@ func commandShow(db *sql.DB) {
 	}
 
 	if (err != nil) {
-		log.Fatal(err)
+		return err
 	}
 	defer rows.Close()
 	
@@ -315,8 +327,9 @@ func commandShow(db *sql.DB) {
 	err = printRows(rows)
 
 	if (err != nil) {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }
 
 func printRows(rows *sql.Rows) error {
@@ -380,7 +393,7 @@ func buildDateQuery(input string) (string, []any) {
 	return "0=1", nil
 }
 
-func commandStats(db *sql.DB) {
+func commandStats(db *sql.DB) error {
 	var input string
 	var yyyy string
 	var month int
@@ -390,7 +403,7 @@ func commandStats(db *sql.DB) {
 	} else {
 		input = args[2]
 		if (input != "all" && input != "expense" && input != "income") {
-			log.Fatal("Invalid stats mode: " + input)
+			return errors.New("Invalid stats mode: " + input)
 		}
 	}
 
@@ -406,7 +419,7 @@ func commandStats(db *sql.DB) {
 			yyyy = args[3]
 			month = 12
 		} else {
-			log.Fatal("Invalid year: " + args[3])
+			return errors.New("Invalid year: " + args[3])
 		}
 	} else {
 		yyyy = time.Now().Format("2006")
@@ -435,7 +448,7 @@ func commandStats(db *sql.DB) {
 		rows, err = db.Query(query, args1...)
 
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 		defer rows.Close()
 
@@ -443,7 +456,7 @@ func commandStats(db *sql.DB) {
 		sum, err = getSumByRows(rows, mode)
 
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 
 		sum_total += sum
@@ -481,6 +494,7 @@ func commandStats(db *sql.DB) {
 		fmt.Println(msgs[i])
 		fmt.Println(bar)
 	}
+	return nil
 }
 
 func addSign(n int) string {
@@ -525,7 +539,7 @@ func ceilDiv(a int,b int) int {
 	return (a+b-1)/b
 }
 
-func commandDeleteRecord(db *sql.DB) {
+func commandDeleteRecord(db *sql.DB) error {
 	var input string
 	var err error
 
@@ -533,7 +547,7 @@ func commandDeleteRecord(db *sql.DB) {
 		input, err = line.Prompt("Input ID: ")
 
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 	} else {
 		input = args[2]
@@ -543,7 +557,7 @@ func commandDeleteRecord(db *sql.DB) {
 
 	r, err = getRecordByID(db, input)
 	if (err != nil) {
-		log.Fatal(err)
+		return err
 	}
 
 	printRecord(r)
@@ -551,11 +565,12 @@ func commandDeleteRecord(db *sql.DB) {
 	if (checkYes()) {
 		err = deleteRecord(db, input)
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 
 		fmt.Println("Successfully removed record: ", input)
 	}
+	return nil
 }
 
 func getRecordByID(db *sql.DB, id string) (Record, error) {
@@ -583,7 +598,7 @@ func deleteRecord(db *sql.DB, id string) error {
 	return err
 }
 
-func commandAddRecord(db *sql.DB, record_type string) {
+func commandAddRecord(db *sql.DB, record_type string) error {
 	var input string
 	var amount int
 	var date time.Time
@@ -593,31 +608,43 @@ func commandAddRecord(db *sql.DB, record_type string) {
 	if (len(args) < 3) {
 		input, err = line.Prompt("Input Amount: ")
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
-		amount = mustInt(input)
+		amount, err = strconv.Atoi(input)
+		if (err != nil) {
+			return err
+		}
 	} else {
-		amount = mustInt(args[2])
+		amount, err = strconv.Atoi(args[2])
+		if (err != nil) {
+			return err
+		}
 	}
 
 	if (amount < 1) {
-		log.Fatal("Invalid amount: ", amount)
+		return errors.New("Invalid amount: " + strconv.Itoa(amount))
 	}
 
 	if (len(args) < 4) {
 		input, err = line.Prompt("Input Date: ")
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
-		date = mustDate(input)
+		date, err = parseDate(input)
+		if (err != nil) {
+			return err
+		}
 	} else {
-		date = mustDate(args[3])
+		date, err = parseDate(args[3])
+		if (err != nil) {
+			return err
+		}
 	}
 
 	if (len(args) < 5) {
 		memo, err = line.Prompt("Input Memo: ")
 		if (err != nil) {
-			log.Fatal(err)
+			return err
 		}
 	} else {
 		memo = args[4]
@@ -637,13 +664,14 @@ func commandAddRecord(db *sql.DB, record_type string) {
 		err = insertRecord(db, r)
 
 		if (err != nil) {
-			log.Fatal(err)	
+			return err	
 		}
 
 		fmt.Println("Successfully added record: ", r.ID)
 	} else {
-		return
+		return nil
 	}
+	return nil
 }
 
 func insertRecord(db *sql.DB, r Record) error {
@@ -657,20 +685,7 @@ func insertRecord(db *sql.DB, r Record) error {
 	return err
 }
 
-func mustInt(str string) int {
-	var n int
-	var err error
-
-	n, err = strconv.Atoi(str)
-
-	if (err != nil) {
-		log.Fatal(err)
-	}
-
-	return n
-}
-
-func mustDate(str string) time.Time {
+func parseDate(str string) (time.Time, error) {
 	var t time.Time
 	var err error
 
@@ -689,43 +704,29 @@ func mustDate(str string) time.Time {
 		} else if (str == "y" || str == "yesterday") {
 			full = time.Now().AddDate(0, 0, -1).Format("20060102")
 		} else {
-			log.Fatal("Inavlid date alias: " + str)
+			return t, errors.New("Inavlid date alias: " + str)
 		}
 	default:
-		log.Fatal("Invalid date format: " + str)
+		return t, errors.New("Invalid date format: " + str)
 	}
 	
 	t, err = time.ParseInLocation("20060102", full, time.Now().Location())
 
 	if (err != nil) {
-		log.Fatal(err)
+		return t, err
 	}
 
-	return t
+	return t, nil
 }
 
 func checkYes() bool {
-	var oldState *term.State
-	var err error
-
-	oldState, err = term.MakeRaw(int(os.Stdin.Fd()))
-
-	if (err != nil) {
-		log.Fatal(err)
+	input, err := line.Prompt("Sure? [y/n]: ")
+	if err != nil {
+		return false
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	fmt.Print("Sure? [y/n]: ")
-
-	var b []byte = make([]byte, 1)
-	os.Stdin.Read(b)
-
-	fmt.Print(string(b[0]))
-	term.Restore(int(os.Stdin.Fd()), oldState)
-	fmt.Println()
-
-	switch b[0] {
-	case 'y', 'Y':
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "y", "yes":
 		return true
 	default:
 		return false
