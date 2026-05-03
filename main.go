@@ -390,13 +390,13 @@ func commandStats(db *sql.DB) {
 		var gsum int = sum
 		var t string = ""
 		if (mode == 0) {
-			gsum = getMin(gsum, 0)
+			gsum = min(gsum, 0)
 			t = addSign(sum)
 		} else {
-			t = strconv.Itoa(getAbs(sum))
+			t = strconv.Itoa(abs(sum))
 		}
-		gsum = getAbs(gsum)
-		gsum_max = getMax(gsum_max, gsum)
+		gsum = abs(gsum)
+		gsum_max = max(gsum_max, gsum)
 		gsums = append(gsums, gsum)
 
 		msgs = append(msgs, fmt.Sprintf("[%s-%s] %s", yyyy, mm, t))
@@ -414,7 +414,7 @@ func commandStats(db *sql.DB) {
 		if (gsum_max == 0) {
 			ratio = 1
 		} else {
-			ratio = getMax((gsums[i]*40+gsum_max-1)/gsum_max,1)
+			ratio = max((gsums[i]*40+gsum_max-1)/gsum_max,1)
 		}
 		bar = strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 40-ratio)
 		fmt.Println(msgs[i])
@@ -453,25 +453,11 @@ func getSumByRows(rows *sql.Rows, mode int) (int, error) {
 	return result, nil
 }
 
-func getAbs(x int) int {
+func abs(x int) int {
 	if (x >= 0) {
 		return x
 	}
 	return -x
-}
-
-func getMax(x int,m int) int {
-	if (x > m) {
-		return x
-	}
-	return m
-}
-
-func getMin(x int,m int) int {
-	if (x < m) {
-		return x
-	}
-	return m
 }
 
 func commandDeleteRecord(db *sql.DB) {
