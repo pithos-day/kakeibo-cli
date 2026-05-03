@@ -18,11 +18,11 @@ import (
 const version string = "1.0.0"
 const unit string = "円"
 
-var args int
+var args []string
 
 func main() {
-	args = len(os.Args)
-	if (args < 2) {
+	args = os.Args
+	if (len(args) < 2) {
 		commandHelp()
 		return
 	}
@@ -37,24 +37,7 @@ func main() {
 
 	defer db.Close()
 
-	switch os.Args[1] {
-	case "help":
-		commandHelp()
-	case "version":
-		commandVersion()
-	case "show":
-		commandShow(db)
-	case "stats":
-		commandStats(db)
-	case "delete":
-		commandDeleteRecord(db)
-	case "expense":
-		commandAddRecord(db, "EXPENSE")
-	case "income":
-		commandAddRecord(db, "INCOME")
-	default:
-		fmt.Println("Unknown command: ", os.Args[1])
-	}
+	executeCommand(db)
 }
 
 func openDB() (*sql.DB, error) {
@@ -98,10 +81,37 @@ func openDB() (*sql.DB, error) {
 	return db, nil
 }
 
+func executeCommand(db *sql.DB) {
+	switch args[1] {
+	case "help":
+		commandHelp()
+	case "version":
+		commandVersion()
+	case "repl":
+		if (args[0] != "repl") {
+			commandRepl(db)
+		} else {
+			fmt.Println("Can't execute repl in repl")
+		}
+	case "show":
+		commandShow(db)
+	case "stats":
+		commandStats(db)
+	case "delete":
+		commandDeleteRecord(db)
+	case "expense":
+		commandAddRecord(db, "EXPENSE")
+	case "income":
+		commandAddRecord(db, "INCOME")
+	default:
+		fmt.Println("Unknown command: ", args[1])
+	}
+}
+
 func commandHelp() {
 	
-	if (args > 2) {
-		var input string = os.Args[2]
+	if (len(args) > 2) {
+		var input string = args[2]
 		if (input == "show") {
 			fmt.Println(`Usage:
 
@@ -116,8 +126,8 @@ Filter:
   	YYYY		Specific year (2001)
 	MMDD		Day in current year (0203)
   	MM		Month in current year (02)
-		t		Today
-		y		Yesterday
+	t		Today
+	y		Yesterday
 
 Examples:
 
@@ -188,6 +198,7 @@ The commands are:
 
 	help		show this message
 	version		show kakeibo-cli version
+	repl        start interactive mode (type 'exit' to quit)
 	show		show records
 	stats		show monthly statistics
 	expense		add expense record
@@ -202,16 +213,41 @@ func commandVersion() {
 	fmt.Println("kakeibo-cli v" + version)
 }
 
+func commandRepl(db *sql.DB) {
+
+	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
+
+	for {
+		fmt.Print("> ")
+
+		if !sc.Scan() {
+			break
+		}
+
+		var line string = sc.Text()
+
+		if line == "exit" {
+			break
+		}
+
+		var input []string = append([]string{"repl"}, strings.Fields(line)...)
+		args = input
+
+		executeCommand(db)
+	}
+
+}
+
 func commandShow(db *sql.DB) {
 	var input string
 
-	if (args < 3) {
+	if (len(args) < 3) {
 		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
 		fmt.Print("Input date: ")
 		sc.Scan()
 		input = sc.Text()
 	} else {
-		input = os.Args[2]
+		input = args[2]
 	}
 
 	var rows *sql.Rows
@@ -232,8 +268,8 @@ func commandShow(db *sql.DB) {
 		`)
 	} else {
 		var cond string
-		var args []any
-		cond, args = buildDateQuery(input)
+		var args1 []any
+		cond, args1 = buildDateQuery(input)
 
 		var query string = fmt.Sprintf(`
 		SELECT id, amount, date, memo, record_type
@@ -242,7 +278,7 @@ func commandShow(db *sql.DB) {
 		ORDER BY date DESC
 		`, cond)
 
-		rows, err = db.Query(query, args...)
+		rows, err = db.Query(query, args1...)
 	}
 
 	if (err != nil) {
@@ -324,10 +360,10 @@ func commandStats(db *sql.DB) {
 	var yyyy string
 	var month int
 
-	if (args < 3) {
+	if (len(args) < 3) {
 		input = "all"
 	} else {
-		input = os.Args[2]
+		input = args[2]
 		if (input != "all" && input != "expense" && input != "income") {
 			log.Fatal("Invalid stats mode: " + input)
 		}
@@ -340,12 +376,12 @@ func commandStats(db *sql.DB) {
 		mode = 1
 	}
 
-	if (args > 3) {
-		if (len(os.Args[3]) == 4) {
-			yyyy = os.Args[3]
+	if (len(args) > 3) {
+		if (len(args[3]) == 4) {
+			yyyy = args[3]
 			month = 12
 		} else {
-			log.Fatal("Invalid year: " + os.Args[3])
+			log.Fatal("Invalid year: " + args[3])
 		}
 	} else {
 		yyyy = time.Now().Format("2006")
@@ -361,8 +397,8 @@ func commandStats(db *sql.DB) {
 	for ; i <= month; i++ {
 		var mm string = fmt.Sprintf("%02d", i)
 		var cond string
-		var args []any
-		cond, args = buildDateQuery(yyyy + mm)
+		var args1 []any
+		cond, args1 = buildDateQuery(yyyy + mm)
 
 		var query string = fmt.Sprintf(`
 		SELECT id, amount, date, memo, record_type
@@ -371,7 +407,7 @@ func commandStats(db *sql.DB) {
 		ORDER BY date DESC
 		`, cond)
 
-		rows, err = db.Query(query, args...)
+		rows, err = db.Query(query, args1...)
 
 		if (err != nil) {
 			log.Fatal(err)
@@ -467,13 +503,13 @@ func ceilDiv(a int,b int) int {
 func commandDeleteRecord(db *sql.DB) {
 	var input string
 
-	if (args < 3) {
+	if (len(args) < 3) {
 		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
 		fmt.Print("Input ID: ")
 		sc.Scan()
 		input = sc.Text()
 	} else {
-		input = os.Args[2]
+		input = args[2]
 	}
 
 	var r Record
@@ -528,32 +564,32 @@ func commandAddRecord(db *sql.DB, record_type string) {
 
 	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
 
-	if (args < 3) {
+	if (len(args) < 3) {
 		fmt.Print("Input Amount: ")
 		sc.Scan()
 		amount = mustInt(sc.Text())
 	} else {
-		amount = mustInt(os.Args[2])
+		amount = mustInt(args[2])
 	}
 
 	if (amount < 1) {
 		log.Fatal("Invalid amount: ", amount)
 	}
 
-	if (args < 4) {
+	if (len(args) < 4) {
 		fmt.Print("Input Date: ")
 		sc.Scan()
 		date = mustDate(sc.Text())
 	} else {
-		date = mustDate(os.Args[3])
+		date = mustDate(args[3])
 	}
 
-	if (args < 5) {
+	if (len(args) < 5) {
 		fmt.Print("Input Memo: ")
 		sc.Scan()
 		memo = sc.Text()
 	} else {
-		memo = os.Args[4]
+		memo = args[4]
 	}
 
 	fmt.Println("Amount:", amount, ", Date:", date.Format("2006-01-02"), ", Memo:", memo, ", Type:" , record_type)
