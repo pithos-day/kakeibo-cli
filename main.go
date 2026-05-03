@@ -720,7 +720,9 @@ func parseDate(str string) (time.Time, error) {
 }
 
 func checkYes() bool {
-	input, err := line.Prompt("Sure? [y/n]: ")
+	var input string
+	var err error
+	input, err = line.Prompt("Sure? [y/n]: ")
 	if err != nil {
 		return false
 	}
