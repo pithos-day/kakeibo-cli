@@ -414,7 +414,7 @@ func commandStats(db *sql.DB) {
 		if (gsum_max == 0) {
 			ratio = 1
 		} else {
-			ratio = max((gsums[i]*40+gsum_max-1)/gsum_max,1)
+			ratio = max(ceilDiv(gsums[i]*40,gsum_max),1)
 		}
 		bar = strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 40-ratio)
 		fmt.Println(msgs[i])
@@ -458,6 +458,10 @@ func abs(x int) int {
 		return x
 	}
 	return -x
+}
+
+func ceilDiv(a int,b int) int {
+	return (a+b-1)/b
 }
 
 func commandDeleteRecord(db *sql.DB) {
