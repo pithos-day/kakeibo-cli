@@ -465,7 +465,7 @@ func commandStats(db *sql.DB) error {
 		var t string = ""
 		if (mode == 0) {
 			gsum = min(gsum, 0)
-			t = addSign(sum)
+			t = sign(sum)
 		} else {
 			t = strconv.Itoa(abs(sum))
 		}
@@ -478,7 +478,7 @@ func commandStats(db *sql.DB) error {
 
 	var average int = sum_total/month
 
-	fmt.Printf("[%s-01 ~ %s-%s] Total: %s, Average: %s\n\n", yyyy, yyyy, fmt.Sprintf("%02d", month), addSign(sum_total), addSign(average))
+	fmt.Printf("[%s-01 ~ %s-%s] Total: %s, Average: %s\n\n", yyyy, yyyy, fmt.Sprintf("%02d", month), sign(sum_total), sign(average))
 
 	i = 0
 
@@ -497,7 +497,7 @@ func commandStats(db *sql.DB) error {
 	return nil
 }
 
-func addSign(n int) string {
+func sign(n int) string {
 	var t string = ""
 	switch {
 	case n == 0:
