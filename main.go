@@ -2,7 +2,6 @@ package main
 
 import (
   "fmt"
-	"bufio"
 	"os"
 	"log"
 	"strings"
@@ -12,12 +11,14 @@ import (
 	"path/filepath"
 	"database/sql"
 	"golang.org/x/term"
+	"github.com/peterh/liner"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const version string = "1.0.0"
 const unit string = "円"
 
+var line *liner.State
 var args []string
 
 func main() {
@@ -37,6 +38,10 @@ func main() {
 
 	defer db.Close()
 
+	line = liner.NewLiner()
+	line.SetCtrlCAborts(true)
+	defer line.Close()
+	
 	executeCommand(db)
 }
 
@@ -106,6 +111,22 @@ func executeCommand(db *sql.DB) {
 	default:
 		fmt.Println("Unknown command: ", args[1])
 	}
+}
+
+var commands []string = []string{
+	"help", "version", "show", "stats",
+	"expense", "income", "delete", "exit",
+}
+
+func replCompleter(input string) []string {
+	var res []string
+	var cmd string
+	for _, cmd = range commands {
+		if strings.HasPrefix(cmd, input) {
+			res = append(res, cmd)
+		}
+	}
+	return res
 }
 
 func commandHelp() {
@@ -214,44 +235,48 @@ func commandVersion() {
 }
 
 func commandRepl(db *sql.DB) {
-
-	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
-
+	line.SetCompleter(replCompleter)
 	for {
-		fmt.Print("> ")
+		var input string
+		var err error
+		input, err = line.Prompt("> ")
 
-		if !sc.Scan() {
+		if (err != nil) {
 			break
 		}
 
-		var line string = sc.Text()
-
-		if line == "exit" {
+		if input == "exit" {
 			break
 		}
 
-		var input []string = append([]string{"repl"}, strings.Fields(line)...)
-		args = input
+		var cmds []string = append([]string{"repl"}, strings.Fields(input)...)
+		args = cmds
 
-		executeCommand(db)
+		if (1 < len(args)) {
+			line.SetCompleter(nil)
+			executeCommand(db)
+			line.AppendHistory(input)
+			line.SetCompleter(replCompleter)
+		}
 	}
 
 }
 
 func commandShow(db *sql.DB) {
 	var input string
+	var err error
 
 	if (len(args) < 3) {
-		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
-		fmt.Print("Input date: ")
-		sc.Scan()
-		input = sc.Text()
+		input, err = line.Prompt("Input date: ")
+
+		if (err != nil) {
+			log.Fatal(err)
+		}
 	} else {
 		input = args[2]
 	}
 
 	var rows *sql.Rows
-	var err error
 
 	if (input == "latest") {
 		rows, err = db.Query(`
@@ -502,18 +527,19 @@ func ceilDiv(a int,b int) int {
 
 func commandDeleteRecord(db *sql.DB) {
 	var input string
+	var err error
 
 	if (len(args) < 3) {
-		var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
-		fmt.Print("Input ID: ")
-		sc.Scan()
-		input = sc.Text()
+		input, err = line.Prompt("Input ID: ")
+
+		if (err != nil) {
+			log.Fatal(err)
+		}
 	} else {
 		input = args[2]
 	}
 
 	var r Record
-	var err error
 
 	r, err = getRecordByID(db, input)
 	if (err != nil) {
@@ -558,16 +584,18 @@ func deleteRecord(db *sql.DB, id string) error {
 }
 
 func commandAddRecord(db *sql.DB, record_type string) {
+	var input string
 	var amount int
 	var date time.Time
 	var memo string
-
-	var sc *bufio.Scanner = bufio.NewScanner(os.Stdin)
+	var err error
 
 	if (len(args) < 3) {
-		fmt.Print("Input Amount: ")
-		sc.Scan()
-		amount = mustInt(sc.Text())
+		input, err = line.Prompt("Input Amount: ")
+		if (err != nil) {
+			log.Fatal(err)
+		}
+		amount = mustInt(input)
 	} else {
 		amount = mustInt(args[2])
 	}
@@ -577,17 +605,20 @@ func commandAddRecord(db *sql.DB, record_type string) {
 	}
 
 	if (len(args) < 4) {
-		fmt.Print("Input Date: ")
-		sc.Scan()
-		date = mustDate(sc.Text())
+		input, err = line.Prompt("Input Date: ")
+		if (err != nil) {
+			log.Fatal(err)
+		}
+		date = mustDate(input)
 	} else {
 		date = mustDate(args[3])
 	}
 
 	if (len(args) < 5) {
-		fmt.Print("Input Memo: ")
-		sc.Scan()
-		memo = sc.Text()
+		memo, err = line.Prompt("Input Memo: ")
+		if (err != nil) {
+			log.Fatal(err)
+		}
 	} else {
 		memo = args[4]
 	}
@@ -603,7 +634,7 @@ func commandAddRecord(db *sql.DB, record_type string) {
 			CreatedAt: fmt.Sprintf("%d", time.Now().Unix()),
 		}
 
-		var err error = insertRecord(db, r)
+		err = insertRecord(db, r)
 
 		if (err != nil) {
 			log.Fatal(err)	
