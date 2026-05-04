@@ -3,6 +3,7 @@ package main
 import (
   "fmt"
 	"os"
+	"encoding/json"
 	"errors"
 	"strings"
 	"strconv"
@@ -117,6 +118,10 @@ func executeCommand(db *sql.DB) error {
 		return commandAddRecord(db, "EXPENSE")
 	case "income":
 		return commandAddRecord(db, "INCOME")
+	case "export":
+		return commandTransfer(db, 0)
+	case "import":
+		return commandTransfer(db, 1)
 	default:
 		fmt.Println("Unknown command: ", args[1])
 		return nil
@@ -207,6 +212,31 @@ Arguments:
 Examples:
 
 	kakeibo-cli delete 1cb193f6`)
+		} else if (input == "export") {
+				fmt.Println(`Usage:
+ 
+	kakeibo-cli export [path]
+ 
+Arguments:
+ 
+	path		Output file path (default: ~/Documents/exported_kakeibo_YYYYMMDD-{timestamp}.json)
+ 
+Examples:
+ 
+	kakeibo-cli export
+	kakeibo-cli export /tmp/backup.json`)
+		} else if (input == "import") {
+				fmt.Println(`Usage:
+ 
+	kakeibo-cli import [path]
+ 
+Arguments:
+ 
+	path		JSON file path to import (duplicate records are skipped)
+ 
+Examples:
+ 
+	kakeibo-cli import /tmp/backup.json`)
 		} else {
 			fmt.Println("Invalid help topic: " + input)
 		}
@@ -226,6 +256,8 @@ The commands are:
 	expense		add expense record
 	income		add income record
 	delete		delete record
+	export		export records to JSON
+	import		import records from JSON
 
 For details, run: kakeibo-cli help <command>`)
 	}
@@ -919,6 +951,124 @@ func checkYes() bool {
 	default:
 		return false
 	}
+}
+
+func commandTransfer(db *sql.DB, mode int) error {
+	var path string
+	var err error
+
+	if (len(args) < 3) {
+		if (mode == 0) {
+			path, err = defaultExportPath()
+		} else {
+			path, err = line.Prompt("Input Path: ")
+		}
+
+		if (err != nil) {
+			return err
+		}
+	} else {
+		path = args[2]
+	}
+	
+	if (mode == 0) {
+		//export
+		return exportJson(db, path)
+	} else if (mode == 1) {
+		//import
+		return importJson(db, path)
+	}
+	return nil
+}
+
+func defaultExportPath() (string, error) {
+	var home string
+	var err error
+
+	home, err = os.UserHomeDir()
+	if (err != nil) {
+		return "", err
+	}
+
+	var date string = time.Now().Format("20060102")
+	var ts int64 = time.Now().Unix()
+
+	var path string = filepath.Join(
+		home,
+		"Documents",
+		fmt.Sprintf("exported_kakeibo_%s-%d.json", date, ts),
+	)
+
+	return path, nil
+}
+
+func exportJson(db *sql.DB, path string) error {
+	var rows *sql.Rows
+	var err error
+
+	rows, err = db.Query(`
+		SELECT id, amount, date, memo, record_type, created_at, category
+		FROM records
+	`)
+	if (err != nil) {
+		return err
+	}
+	defer rows.Close()
+
+	var records []Record
+
+	for rows.Next() {
+		var r Record
+		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType, &r.CreatedAt, &r.Category)
+		if (err != nil) {
+			return err
+		}
+		records = append(records, r)
+	}
+
+	var f *os.File
+	f, err = os.Create(path)
+	if (err != nil) {
+		return err
+	}
+	defer f.Close()
+
+	var enc *json.Encoder = json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(records)
+}
+
+func importJson(db *sql.DB, path string) error {
+	var f *os.File
+	var err error
+
+	f, err = os.Open(path)
+	if (err != nil) {
+		return err
+	}
+	defer f.Close()
+
+	var records []Record
+
+	err = json.NewDecoder(f).Decode(&records)
+	if (err != nil) {
+		return err
+	}
+
+	for _, r := range records {
+		_, err = db.Exec(`
+			INSERT OR IGNORE INTO records
+			(id, amount, date, memo, record_type, created_at, category)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, r.Amount, r.Date, r.Memo, r.RecordType, r.CreatedAt, r.Category)
+
+		if (err != nil) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func generateHash(str string) string {
