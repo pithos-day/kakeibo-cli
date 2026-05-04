@@ -395,6 +395,202 @@ func buildDateQuery(input string) (string, []any) {
 }
 
 func commandStats(db *sql.DB) error {
+	var date string
+	var err error
+
+	if (len(args) < 3) {
+		date = time.Now().Format("2006")
+	} else {
+		var flag bool = false
+		switch len(args[2]) {
+		case 2:
+			var mm int
+			mm, err = strconv.Atoi(args[2])
+			if (err != nil) {
+				return nil
+			}
+
+			if (0 < mm && mm < 13) {
+				date = time.Now().Format("2006") + args[2]
+			} else {
+				flag = true
+			}
+		case 4:
+			date = args[2]
+		case 6:
+			date = args[2]
+		default:
+			flag = true
+		}
+
+		if (flag) {
+			return errors.New("Invalid date: " + args[2])
+		}
+	}
+
+	var mode int = 0
+
+	if (len(args) > 3) {
+		switch args[3] {
+		case "period":
+			mode = 0
+		case "category":
+			mode = 1
+		default:
+			return errors.New("Invalid mode: " + args[3])
+		}
+	}
+
+	var filter int
+
+	if (len(args) < 5) {
+		filter = 0
+	} else {
+		switch args[4] {
+		case "all":
+			filter = 0
+		case "expense":
+			filter = -1
+		case "income":
+			filter = 1
+		default:
+			return errors.New("Invalid filter: " + args[4])
+		}
+	}
+
+	var recordSets []RecordSet
+	var label string
+
+	if (mode == 0) {
+		var i int = 1
+		var i1 int
+		var label1 string
+		switch len(date) {
+		case 4:
+			label1 = date
+			if (date == time.Now().Format("2006")) {
+				i1 = int(time.Now().Month())
+			} else {
+				i1 = 12
+			}
+		case 6:
+			label1 = date[:4] + "-" + date[4:]
+			if (date == time.Now().Format("200601")) {
+				i1 = time.Now().Day()
+			} else {
+				var year int
+				year, err = strconv.Atoi(date[:4])
+				if (err != nil) {
+					return err
+				}
+				var month int
+				month, err = strconv.Atoi(date[4:])
+				if (err != nil) {
+					return err
+				}
+				i1 = time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.Local).Day()
+			}
+		}
+
+		label = fmt.Sprintf("[%s-01 ~ %s-%s]", label1, label1, fmt.Sprintf("%02d", i1))
+
+		for ; i <= i1; i++ {
+			var cond string
+			var args1 []any
+			cond, args1 = buildDateQuery(date + fmt.Sprintf("%02d", i))
+
+			var query string = fmt.Sprintf(`
+			SELECT id, amount, date, memo, record_type, category
+			FROM records
+			WHERE %s
+			ORDER BY date DESC
+			`, cond)
+
+			var rows *sql.Rows
+			rows, err = db.Query(query, args1...)
+
+			if (err != nil) {
+				return err
+			}
+			defer rows.Close()
+
+			var rs RecordSet 
+			rs, err = rowsToRecordSet(label1 + "-" + fmt.Sprintf("%02d", i), rows, filter)
+
+			if (err != nil) {
+				return err
+			}
+			recordSets = append(recordSets, rs)
+		}
+	} else if (mode == 1) {
+		label = "[Categories]"
+	}
+
+	var total int
+	var maximum int = 1
+
+	for _, r := range recordSets {
+		total += r.Sum
+
+		if (filter == 0) {
+			maximum = max(maximum, abs(min(r.Sum,0)))
+		} else {
+			maximum = max(maximum, abs(r.Sum))
+		}
+	}
+
+	fmt.Printf("%s Total: %s, Average: %s\n\n", label, sign(total), sign(total/len(recordSets)))
+
+	for _, r := range recordSets {
+		fmt.Println(r.Name, sign(r.Sum))
+
+		var ratio int = 1
+		if (maximum != 0) {
+			var absSum int
+			if (filter == 0) {
+				absSum = abs(min(r.Sum, 0))
+			} else {
+				absSum = abs(r.Sum)
+			}
+			ratio = max(ceilDiv(absSum*40,maximum),1)
+		}
+
+		fmt.Println(strings.Repeat("\u2588", ratio) + strings.Repeat("\u2591", 40-ratio))
+	}
+
+	return nil
+}
+
+func rowsToRecordSet(label string, rows *sql.Rows, filter int) (RecordSet, error) {
+	var recordSet RecordSet
+	var records []Record
+	var sum int
+
+	var err error
+	for rows.Next() {
+		var r Record
+		err = rows.Scan(&r.ID, &r.Amount, &r.Date, &r.Memo, &r.RecordType, &r.Category)
+		if err != nil {
+			return recordSet, err
+		}
+		records = append(records, r)
+		
+		if (filter < 1 && r.RecordType == "EXPENSE") {
+			sum -= r.Amount
+		} else if (filter > -1 && r.RecordType == "INCOME") {
+			sum += r.Amount
+		}
+	}
+
+	recordSet.Name = label
+	recordSet.Records = records
+	recordSet.Sum = sum
+
+	return recordSet, nil
+}
+
+/*
+func commandStats(db *sql.DB) error {
 	var input string
 	var yyyy string
 	var month int
@@ -497,6 +693,7 @@ func commandStats(db *sql.DB) error {
 	}
 	return nil
 }
+*/
 
 func sign(n int) string {
 	var t string = ""
@@ -509,6 +706,7 @@ func sign(n int) string {
 	return t + strconv.Itoa(n)
 }
 
+/*
 func getSumByRows(rows *sql.Rows, mode int) (int, error) {
 	// mode 0 = all, -1 = expense only, 1 = income only
 	var result int = 0
@@ -528,6 +726,7 @@ func getSumByRows(rows *sql.Rows, mode int) (int, error) {
 	}
 	return result, nil
 }
+*/
 
 func abs(x int) int {
 	if (x >= 0) {
@@ -577,7 +776,6 @@ func commandDeleteRecord(db *sql.DB) error {
 func getRecordByID(db *sql.DB, id string) (Record, error) {
 	var r Record
 	var err error
-
 	err = db.QueryRow(`
 		SELECT id, amount, date, memo, record_type, category
 		FROM records
@@ -756,6 +954,12 @@ func generateHash(str string) string {
 	var b []byte = []byte(str)
 	var full string = fmt.Sprintf("%x", md5.Sum(b))
 	return full[0:8]
+}
+
+type RecordSet struct {
+	Name string
+	Records []Record
+	Sum int
 }
 
 type Record struct {
