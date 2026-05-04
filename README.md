@@ -5,7 +5,7 @@
 ## インストール
 
 ```sh
-git clone https://github.com/yourname/kakeibo-cli.git
+git clone https://codeberg.org/pithos/kakeibo-cli.git
 cd kakeibo-cli
 go build -o kakeibo-cli
 mv kakeibo-cli ~/.local/bin/
