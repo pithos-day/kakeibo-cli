@@ -159,6 +159,9 @@ Examples:
 Arguments:
  
 	date		YYYY / YYYYMM / MM (default: current year)
+			y	Alias for current year  (YYYY)
+			m	Alias for current month (YYYYMM)
+
 	mode		period      Statistics by period (default)
 			category    Statistics by main category
 			subcategory Statistics by subcategory
@@ -405,11 +408,19 @@ func commandStats(db *sql.DB) error {
 	} else {
 		var flag bool = false
 		switch len(args[2]) {
+		case 1:
+			if (args[2] == "y") {
+				date = time.Now().Format("2006")
+			} else if (args[2] == "m") {
+				date = time.Now().Format("200601")
+			} else {
+				flag = true
+			}
 		case 2:
 			var mm int
 			mm, err = strconv.Atoi(args[2])
 			if (err != nil) {
-				return nil
+				return err
 			}
 
 			if (0 < mm && mm < 13) {
