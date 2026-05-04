@@ -123,22 +123,6 @@ func executeCommand(db *sql.DB) error {
 	}
 }
 
-var commands []string = []string{
-	"help", "version", "show", "stats",
-	"expense", "income", "delete", "exit",
-}
-
-func replCompleter(input string) []string {
-	var res []string
-	var cmd string
-	for _, cmd = range commands {
-		if strings.HasPrefix(cmd, input) {
-			res = append(res, cmd)
-		}
-	}
-	return res
-}
-
 func commandHelp() {
 	
 	if (len(args) > 2) {
@@ -272,7 +256,22 @@ func commandRepl(db *sql.DB) {
 			line.SetCompleter(replCompleter)
 		}
 	}
+}
 
+var commands []string = []string{
+	"help", "version", "show", "stats",
+	"expense", "income", "delete", "exit",
+}
+
+func replCompleter(input string) []string {
+	var res []string
+	var cmd string
+	for _, cmd = range commands {
+		if strings.HasPrefix(cmd, input) {
+			res = append(res, cmd)
+		}
+	}
+	return res
 }
 
 func commandShow(db *sql.DB) error {
@@ -458,7 +457,7 @@ func commandStats(db *sql.DB) error {
 		}
 	}
 
-	var recordSets []RecordSet
+	var recordSets []RecordSet = []RecordSet{}
 	var label string
 
 	if (mode == 0) {
@@ -526,7 +525,7 @@ func commandStats(db *sql.DB) error {
 		label = "[Categories]"
 	}
 
-	var total int
+	var total int = 0
 	var maximum int = 1
 
 	for _, r := range recordSets {
@@ -539,7 +538,7 @@ func commandStats(db *sql.DB) error {
 		}
 	}
 
-	fmt.Printf("%s Total: %s, Average: %s\n\n", label, sign(total), sign(total/len(recordSets)))
+	fmt.Printf("%s Total: %s, Average: %s\n\n", label, sign(total), sign(total/max(len(recordSets),1)))
 
 	for _, r := range recordSets {
 		fmt.Println(r.Name, sign(r.Sum))
