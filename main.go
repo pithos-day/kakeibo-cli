@@ -1,17 +1,19 @@
 package main
 
 import (
-  "fmt"
-	"os"
+	"crypto/md5"
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
-	"strconv"
-	"time"
-	"crypto/md5"
+	"fmt"
+	"os"
 	"path/filepath"
-	"database/sql"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/peterh/liner"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
