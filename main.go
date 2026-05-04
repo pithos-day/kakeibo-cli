@@ -778,7 +778,7 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 	var input string
 	var amount int
 	var date time.Time
-	var memo string
+	var memo string = ""
 	var category string
 	var err error
 
@@ -831,12 +831,7 @@ func commandAddRecord(db *sql.DB, record_type string) error {
 		category = "Misc"
 	}
 
-	if (len(args) < 6) {
-		memo, err = line.Prompt("Input Memo: ")
-		if (err != nil) {
-			return err
-		}
-	} else {
+	if (len(args) > 5) {
 		memo = args[5]
 	}
 
