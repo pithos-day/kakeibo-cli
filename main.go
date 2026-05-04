@@ -435,6 +435,8 @@ func commandStats(db *sql.DB) error {
 			mode = 0
 		case "category":
 			mode = 1
+		case "subcategory":
+			mode = 2
 		default:
 			return errors.New("Invalid mode: " + args[3])
 		}
@@ -521,8 +523,96 @@ func commandStats(db *sql.DB) error {
 			}
 			recordSets = append(recordSets, rs)
 		}
-	} else if (mode == 1) {
+	} else if (mode == 1 || mode == 2) {
 		label = "[Categories]"
+
+		var cond string
+		var args1 []any
+
+		cond, args1 = buildDateQuery(date)
+
+		var query string 
+
+		if (mode == 1) {
+			query = fmt.Sprintf(`
+				SELECT DISTINCT
+					CASE 
+						WHEN INSTR(category, '.') > 0
+						THEN SUBSTR(category, 1, INSTR(category, '.') - 1)
+						ELSE category
+					END AS main
+				FROM records
+				WHERE %s
+				ORDER BY category ASC
+			`, cond)
+		} else {
+			query = fmt.Sprintf(`
+				SELECT DISTINCT category
+				FROM records
+				WHERE %s
+				ORDER BY category ASC
+			`, cond)
+		}
+
+		var rows *sql.Rows
+		rows, err = db.Query(query, args1...)
+
+		if err != nil {
+			return err
+		}
+
+		defer rows.Close()
+
+		var categories []string
+
+		for rows.Next() {
+			var category string
+			err = rows.Scan(&category)
+			if err != nil {
+				return err
+			}
+			categories = append(categories, category)
+		}
+
+		var rows1 *sql.Rows
+		var category string
+
+		for _, category = range categories {
+			var query1 string
+			var args2 []any
+
+			if mode == 1 {
+				query1 = fmt.Sprintf(`
+					SELECT id, amount, date, memo, record_type, category
+					FROM records
+					WHERE (category = ? OR category LIKE ?) AND %s
+				`, cond)
+
+				args2 = append([]any{category, category + ".%"}, args1...)
+			} else {
+				query1 = fmt.Sprintf(`
+					SELECT id, amount, date, memo, record_type, category
+					FROM records
+					WHERE category = ? AND %s
+				`, cond)
+
+				args2 = append([]any{category}, args1...)
+			}
+
+			rows1, err = db.Query(query1, args2...)
+
+			if err != nil {
+				return err
+			}
+
+			var rs RecordSet
+			rs, err = rowsToRecordSet(category, rows1, filter)
+			if (err != nil) {
+				return err
+			}
+			recordSets = append(recordSets, rs)
+			rows1.Close()
+		}
 	}
 
 	var total int = 0
