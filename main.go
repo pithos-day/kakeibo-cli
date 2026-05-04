@@ -141,7 +141,7 @@ func commandHelp() {
 
 Filter:
 
-	latest		Latest 10 records
+	latest		Latest 5 records
 	all		All records
 	YYYYMMDD	Specific date (20010203)
 	YYYYMM		Specific month (200102)
