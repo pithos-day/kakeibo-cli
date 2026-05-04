@@ -134,42 +134,45 @@ func commandHelp() {
 
 Filter:
 
-	latest   	Latest 10 records
-  	all		All records
-  	YYYYMMDD	Specific date (20010203)
-  	YYYYMM		Specific month (200102)
-  	YYYY		Specific year (2001)
+	latest		Latest 10 records
+	all		All records
+	YYYYMMDD	Specific date (20010203)
+	YYYYMM		Specific month (200102)
+	YYYY		Specific year (2001)
 	MMDD		Day in current year (0203)
-  	MM		Month in current year (02)
+	MM		Month in current year (02)
 	t		Today
 	y		Yesterday
 
 Examples:
 
-  kakeibo-cli show latest
-  kakeibo-cli show 200102
-  kakeibo-cli show 02
+	kakeibo-cli show latest
+	kakeibo-cli show 200102
+	kakeibo-cli show 02
 	kakeibo-cli show t`)
 
 		} else if (input == "stats") {
-	fmt.Println(`Usage:
-
-  kakeibo-cli stats [mode] [year]
-
-Mode:
-
-  all        Net balance (income - expense) by month
-  expense    Expenses by month
-  income     Income by month
-
+				fmt.Println(`Usage:
+ 
+		kakeibo-cli stats [date] [mode] [filter]
+ 
 Arguments:
-
-  year       YYYY (e.g. 2026, default: current year)
-
+ 
+	date		YYYY / YYYYMM / MM (default: current year)
+	mode		period      Statistics by period (default)
+			category    Statistics by main category
+			subcategory Statistics by subcategory
+	filter		all         Net balance, income - expense (default)
+			expense     Expenses only
+			income      Income only
+ 
 Examples:
-
-  kakeibo-cli stats
-  kakeibo-cli stats expense`)
+ 
+	kakeibo-cli stats
+	kakeibo-cli stats 2026
+	kakeibo-cli stats 202601
+	kakeibo-cli stats 2026 category
+	kakeibo-cli stats 2026 period expense`)
 		} else if (input == "expense" || input == "income") {
 				fmt.Println(`Usage:
 
@@ -177,14 +180,14 @@ Examples:
 
 Arguments:
 
-	amount    	Expense amount (e.g. 1000)
-  	date    	Date (YYYYMMDD, MMDD, t=today, y=yesterday)
-  	memo    	Description of the record
+	amount		Expense amount (e.g. 1000)
+	date		Date (YYYYMMDD, MMDD, t=today, y=yesterday)
+	memo		Description of the record
 
 Examples:
 `)
 			if (input == "expense") {
-  			fmt.Println("	kakeibo-cli expense 1850 20010203 Lunch")
+				fmt.Println("	kakeibo-cli expense 1850 20010203 Lunch")
 			} else {
 				fmt.Println("	kakeibo-cli income 210000 0203 Salary")
 			}
@@ -195,7 +198,7 @@ Examples:
 
 Arguments:
 
-	id    	Hash id for record
+	id		Hash id for record
 
 Examples:
 
@@ -213,9 +216,9 @@ The commands are:
 
 	help		show this message
 	version		show kakeibo-cli version
-	repl        start interactive mode (type 'exit' to quit)
+	repl		start interactive mode (type 'exit' to quit)
 	show		show records
-	stats		show monthly statistics
+	stats		show statistics
 	expense		add expense record
 	income		add income record
 	delete		delete record
@@ -682,9 +685,9 @@ func sign(n int) string {
 	var t string = ""
 	switch {
 	case n == 0:
-    	t = "\u00B1"
+			t = "\u00B1"
 	case n > 0:
-    	t = "+"
+			t = "+"
 	}
 	return t + strconv.Itoa(n)
 }
