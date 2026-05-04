@@ -179,18 +179,19 @@ Examples:
 		} else if (input == "expense" || input == "income") {
 				fmt.Println(`Usage:
 
-	kakeibo-cli ` + input + ` [amount] [date] [memo]
+	kakeibo-cli ` + input + ` [amount] [date] [category] [memo]
 
 Arguments:
 
 	amount		Expense amount (e.g. 1000)
 	date		Date (YYYYMMDD, MMDD, t=today, y=yesterday)
+	category	Category (default: Misc, supports subcategory e.g. Food.Lunch)
 	memo		Description of the record
 
 Examples:
 `)
 			if (input == "expense") {
-				fmt.Println("	kakeibo-cli expense 1850 20010203 Lunch")
+				fmt.Println("	kakeibo-cli expense 1850 20010203 Food.Lunch Lunch")
 			} else {
 				fmt.Println("	kakeibo-cli income 210000 0203 Salary")
 			}
