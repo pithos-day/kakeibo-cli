@@ -975,10 +975,18 @@ func commandTransfer(db *sql.DB, mode int) error {
 	
 	if (mode == 0) {
 		//export
-		return exportJson(db, path)
+		err = exportJson(db, path)
+		if (err != nil) {
+			return err
+		}
+		fmt.Println("Exported to " + path)
 	} else if (mode == 1) {
 		//import
-		return importJson(db, path)
+		err = importJson(db, path)
+		if (err != nil) {
+			return err
+		}
+		fmt.Println("Imported from " + path)
 	}
 	return nil
 }
