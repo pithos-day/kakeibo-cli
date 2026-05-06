@@ -331,20 +331,21 @@ func commandShow(db *sql.DB) error {
 
 	var rows *sql.Rows
 
-	if (input == "latest") {
+	switch input {
+	case "latest":
 		rows, err = db.Query(`
 		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		ORDER BY created_at DESC
 		LIMIT 5
 		`)
-	} else if (input == "all") {
+	case "all":
 		rows, err = db.Query(`
 		SELECT id, amount, date, memo, record_type, category
 		FROM records
 		ORDER BY date DESC
 		`)
-	} else {
+	default:
 		var cond string
 		var args1 []any
 		cond, args1 = buildDateQuery(input)
@@ -425,9 +426,10 @@ func buildDateQuery(input string) (string, []any) {
 		// MM
 		return "REPLACE(date, '-', '') LIKE ?", []any{today[:4] + input + "%"}
 	case 1:
-		if (input == "t") {
+		switch {
+		case "t":
 			return "REPLACE(date, '-', '') = ?", []any{today}
-		} else if (input == "y") {
+		case "y":
 			return "REPLACE(date, '-', '') = ?", []any{time.Now().AddDate(0, 0, -1).Format("20060102")}
 		}
 	}
